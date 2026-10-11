@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Earth — Interactive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sorts+Mill+Goudy:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#eaf0f6;
+    --dim:#7d8ba0;
+    --line:rgba(234,240,246,0.12);
+    --accent:#4fd1ff;
+    --bg:#03050a;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--bg);
+    overflow:hidden; overscroll-behavior:none;
+    font-family: 'Sorts Mill Goudy', serif;
+    color:var(--ink);
+  }
+  canvas{ display:block; touch-action:none; }
+
+  #veil{
+    position:fixed; inset:0; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px;
+    z-index:60; transition:opacity .8s ease;
+  }
+  #veil .load{
+    font-size:11px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--dim); display:flex; align-items:center;
+  }
+  #veil .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--accent);
+    display:inline-block; margin-right:10px;
+    animation:pulse 1.2s ease-in-out infinite;
+    box-shadow:0 0 8px var(--accent);
+  }
+  #veil .bar{ width:220px; height:2px; background:rgba(234,240,246,0.1); border-radius:2px; overflow:hidden; }
+  #veil .fill{ height:100%; width:0%; background:var(--accent); box-shadow:0 0 8px var(--accent); transition:width .2s ease; }
+  #veil .pct{ font-size:10px; color:var(--dim); letter-spacing:.15em; }
+  @keyframes pulse{ 0%,100%{opacity:.25} 50%{opacity:1} }
+
+  .hud{ position:fixed; z-index:10; pointer-events:none; }
+  #title{
+    top:28px; left:32px;
+    font-family:'Sorts Mill Goudy', serif;
+    font-size:13px; letter-spacing:.32em; text-transform:uppercase;
+    color:var(--ink); font-weight:600;
+  }
+  #title span{
+    display:block; margin-top:6px; font-size:10px; letter-spacing:.2em;
+    font-family:'Sorts Mill Goudy', serif;
+    color:var(--dim); font-weight:400;
+  }
+  #coords{
+    top:28px; right:32px; text-align:right;
+    font-size:11px; letter-spacing:.12em; color:var(--dim);
+    font-variant-numeric: tabular-nums;
+    line-height:1.7;
+  }
+  #coords b{ color:var(--ink); font-weight:600; }
+
+  #controlsPanel{
+    bottom:28px; left:32px;
+    pointer-events:auto;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .btn{
+    pointer-events:auto;
+    background:rgba(234,240,246,0.04);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    padding:10px 16px;
+    border-radius:2px;
+    cursor:pointer;
+    backdrop-filter: blur(6px);
+    transition: all .2s ease;
+    text-align:left;
+    width:180px;
+  }
+  .btn:hover{ background:rgba(79,209,255,0.1); border-color:var(--accent); color:var(--accent); }
+  .btn.active{ background:rgba(79,209,255,0.14); border-color:var(--accent); color:var(--accent); }
+
+  #timePanel{
+    width:180px;
+    max-height:0; opacity:0; overflow:hidden;
+    display:flex; flex-direction:column; gap:10px;
+    padding:0 14px;
+    background:rgba(234,240,246,0.04);
+    border:1px solid transparent; border-radius:2px;
+    backdrop-filter: blur(10px);
+    transition: max-height .32s ease, opacity .28s ease, padding .32s ease, border-color .32s ease;
+    pointer-events:none;
+  }
+  #timePanel.open{
+    max-height:220px; opacity:1; padding:14px;
+    border-color:var(--line);
+    pointer-events:auto;
+  }
+  .timeRow{ display:flex; flex-direction:column; gap:4px; }
+  .timeRow label{
+    font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+  }
+  .timeRow input{
+    background:rgba(234,240,246,0.05); border:1px solid var(--line); border-radius:2px;
+    color:var(--ink); font-size:12px; padding:6px 8px; font-family:inherit;
+    color-scheme: dark;
+  }
+  .timeRow input:focus{ outline:none; border-color:var(--accent); }
+
+  #legend{
+    bottom:88px; right:32px; text-align:right;
+    font-size:10px; letter-spacing:.1em; color:var(--dim); line-height:2;
+    opacity:1; transition: opacity 1s ease;
+  }
+  #legend.faded{ opacity:0; pointer-events:none; }
+  #legend b{ color:var(--ink); }
+  #credit{
+    position:fixed; bottom:8px; left:50%; transform:translateX(-50%);
+    font-size:8.5px; letter-spacing:.08em; color:rgba(125,139,160,0.55);
+    z-index:10; pointer-events:none;
+  }
+
+  #hint{
+    bottom:28px; left:50%; transform:translateX(-50%);
+    font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+    opacity:1; transition:opacity 1s ease;
+  }
+
+  #compass{
+    top:50%; right:32px; transform:translateY(-50%);
+    width:52px; height:52px; border-radius:50%;
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  #compass svg{ width:100%; height:100%; }
+
+  /* ---- search ---- */
+  #searchWrap{
+    top:32px; left:50%; transform:translateX(-50%);
+    width:340px; pointer-events:auto; z-index:20;
+  }
+  #searchBox{
+    display:flex; align-items:center; gap:10px;
+    background:rgba(8,12,20,0.55);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:11px 14px;
+    backdrop-filter: blur(10px);
+  }
+  #searchBox svg{ flex:none; opacity:.55; }
+  #searchInput{
+    flex:1; background:transparent; border:none; outline:none;
+    color:var(--ink); font-size:12px; letter-spacing:.04em;
+    font-family:inherit;
+  }
+  #searchInput::placeholder{ color:var(--dim); }
+  #searchClear{
+    display:none; flex:none; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%; cursor:pointer;
+    opacity:.6; transition: opacity .15s ease, background .15s ease;
+  }
+  #searchClear:hover{ opacity:1; background:rgba(234,240,246,0.08); }
+  #searchClear.show{ display:flex; }
+  #searchResults{
+    margin-top:6px; border-radius:3px; overflow:hidden;
+    background:rgba(8,12,20,0.72);
+    border:1px solid var(--line);
+    backdrop-filter: blur(10px);
+    display:none;
+  }
+  #searchResults.open{ display:block; }
+  .searchRow{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:10px 14px; cursor:pointer;
+    font-size:12px; letter-spacing:.02em;
+    border-top:1px solid rgba(234,240,246,0.06);
+  }
+  .searchRow:first-child{ border-top:none; }
+  .searchRow .cat{
+    font-size:8.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--dim);
+  }
+  .searchRow:hover, .searchRow.active{ background:rgba(79,209,255,0.1); color:var(--accent); }
+  .searchRow:hover .cat, .searchRow.active .cat{ color:var(--accent); opacity:.7; }
+
+  /* ---- photosphere cluster popup ---- */
+  #clusterPopup{
+    position:fixed; z-index:15; pointer-events:auto;
+    width:220px; border-radius:6px; overflow:hidden;
+    background:rgba(8,12,20,0.9); border:1px solid var(--line);
+    backdrop-filter: blur(10px); display:none;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  #clusterPopup.open{ display:block; }
+  .clusterRow{
+    position:relative; height:72px; cursor:pointer;
+    background-color:#0d1420; background-size:cover; background-position:center;
+    border-top:1px solid rgba(234,240,246,0.08);
+  }
+  .clusterRow:first-child{ border-top:none; }
+  .clusterRow::after{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.15) 60%, transparent 100%);
+    transition:background .15s ease;
+  }
+  .clusterRow:hover::after{ background:linear-gradient(to top, rgba(79,209,255,0.45) 0%, rgba(0,0,0,0.2) 60%, transparent 100%); }
+  .clusterRowLabel{
+    position:absolute; left:10px; right:10px; bottom:7px; z-index:1;
+    font-family:'Sorts Mill Goudy', serif; font-weight:400;
+    font-size:13px; letter-spacing:.04em; color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,0.85);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  ::selection{ background:var(--accent); color:#000; }
+
+  #photosphereToggleBtn{
+    display:flex; align-items:center; justify-content:center;
+    position:fixed; bottom:20px; right:18px; z-index:11;
+    width:44px; height:44px; border-radius:50%;
+    background:rgba(8,12,20,0.7); border:1px solid var(--line);
+    backdrop-filter: blur(10px); cursor:pointer; pointer-events:auto;
+    transition: background .2s ease, border-color .2s ease;
+  }
+  #photosphereToggleBtn:hover{ background:rgba(79,209,255,0.12); border-color:var(--accent); }
+  #photosphereToggleBtn.active{ background:rgba(79,209,255,0.18); border-color:var(--accent); }
+  #photosphereToggleBtn svg{ width:20px; height:20px; }
+
+  #panoOverlay{
+    position:fixed; inset:0; z-index:40;
+    background:#000;
+    opacity:0; pointer-events:none;
+    transition: opacity .35s ease;
+  }
+  #panoOverlay.open{ opacity:1; pointer-events:auto; }
+  #panoCanvas{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
+  #panoCanvas:active{ cursor:grabbing; }
+  #panoClose{
+    position:absolute; top:20px; left:20px; z-index:2;
+    display:flex; align-items:center; gap:9px;
+    padding:10px 16px; border-radius:3px; cursor:pointer;
+    background:rgba(8,12,20,0.6); border:1px solid var(--line);
+    backdrop-filter: blur(10px);
+    color:var(--ink); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  }
+  #panoClose:hover{ border-color:var(--accent); color:var(--accent); }
+  #panoTitle{
+    position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:2;
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
+    background:rgba(8,12,20,0.5); padding:9px 18px; border-radius:3px;
+    pointer-events:none; text-align:center;
+  }
+  #panoLoading{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--dim); font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+    opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  #panoLoading.show{ opacity:1; }
+
+  /* ---- mobile ---- */
+  #mobileSettingsBtn{ display:none; }
+  #mobileBackdrop{ display:none; }
+  #mobileSheetHeader{ display:none; }
+
+  @media (max-width: 700px){
+    #title{ top:14px; left:14px; font-size:9px; letter-spacing:.18em; }
+    #title span{ display:none; }
+    #coords{ display:none; }
+    #compass{ display:none; }
+    #photosphereToggleBtn{ bottom:calc(78px + env(safe-area-inset-bottom)); }
+
+    #searchWrap{
+      top:14px; left:14px; right:14px; width:auto; transform:none;
+    }
+
+    #legend{ display:none; }
+    #hint{ bottom:88px; font-size:9px; }
+    #credit{ font-size:7px; bottom:4px; max-width:70vw; }
+
+    /* controlsPanel becomes a hidden-by-default bottom sheet, opened via the gear button */
+    #controlsPanel{
+      left:50%; right:auto; bottom:0;
+      transform: translate(-50%, 12px);
+      width:min(360px, calc(100vw - 24px));
+      max-height:75vh; overflow-y:auto;
+      background:rgba(6,10,18,0.94);
+      border:1px solid var(--line);
+      border-top-left-radius:14px; border-top-right-radius:14px;
+      padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+      opacity:0; pointer-events:none;
+      transition: transform .28s ease, opacity .28s ease;
+      box-shadow:0 -12px 40px rgba(0,0,0,0.55);
+      z-index:15;
+    }
+    #controlsPanel.mobileOpen{
+      transform: translate(-50%, 0);
+      opacity:1; pointer-events:auto;
+    }
+    /* .btn{pointer-events:auto} (global rule, needed on desktop) otherwise leaks through
+       the closed panel's opacity:0/pointer-events:none, leaving its buttons clickable
+       right where they sit — which overlaps the FAB icons (gear, photosphere toggle). */
+    #controlsPanel:not(.mobileOpen) .btn{ pointer-events:none; }
+    #controlsPanel .btn{ width:100%; padding:14px 16px; font-size:11px; }
+    #timePanel{ width:100%; }
+    #mobileSheetHeader{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:12px; padding-bottom:10px;
+      border-bottom:1px solid var(--line);
+    }
+    #mobileSheetHeader span{
+      font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim);
+    }
+    #mobileSheetClose{
+      width:28px; height:28px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(234,240,246,0.06); border:1px solid var(--line);
+      color:var(--ink); cursor:pointer; font-size:14px; line-height:1;
+    }
+
+    #mobileBackdrop{
+      display:block; position:fixed; inset:0; background:rgba(0,0,0,0.5);
+      opacity:0; pointer-events:none; transition:opacity .28s ease; z-index:9;
+    }
+    #mobileBackdrop.show{ opacity:1; pointer-events:auto; }
+
+    #mobileSettingsBtn{
+      display:flex; align-items:center; justify-content:center;
+      position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); right:18px;
+      z-index:11; width:50px; height:50px; border-radius:50%;
+      background:rgba(8,12,20,0.78); border:1px solid var(--line);
+      backdrop-filter: blur(10px);
+      pointer-events:auto; cursor:pointer;
+    }
+    #mobileSettingsBtn svg{ width:22px; height:22px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="veil">
+  <div class="load"><span class="dot"></span>LOADING 8K TEXTURES</div>
+  <div class="bar"><div class="fill" id="loadFill"></div></div>
+  <div class="pct" id="loadPct">0%</div>
+</div>
+
+<div class="hud" id="title">EARTH<span>interactive orbit viewer</span></div>
+
+<div class="hud" id="coords">
+  LAT <b id="lat">—</b>&nbsp;&nbsp;LON <b id="lon">—</b><br>
+  ALT <b id="alt">—</b> KM
+</div>
+
+<div class="hud" id="compass">
+  <svg viewBox="0 0 52 52">
+    <circle cx="26" cy="26" r="24" fill="none" stroke="rgba(234,240,246,0.15)" stroke-width="1"/>
+    <text id="compassN" x="26" y="12" fill="#4fd1ff" font-size="9" text-anchor="middle" font-family="'Sorts Mill Goudy', serif">N</text>
+  </svg>
+</div>
+
+<div class="hud" id="searchWrap">
+  <div id="searchBox">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d8ba0" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchInput" type="text" placeholder="Search cities, parks, landmarks…" autocomplete="off">
+    <div id="searchClear">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7d8ba0" stroke-width="2.4"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+    </div>
+  </div>
+  <div id="searchResults"></div>
+</div>
+
+<div class="hud" id="controlsPanel">
+  <div id="mobileSheetHeader">
+    <span>Settings</span>
+    <div id="mobileSheetClose">✕</div>
+  </div>
+  <div class="btn active" id="toggleClouds">Clouds: on</div>
+  <div class="btn active" id="toggleSpin">Auto-rotate: on</div>
+  <div class="btn" id="resetView">Reset view</div>
+  <div class="btn" id="toggleTimePanel">Time: Live (UTC)</div>
+  <div id="timePanel">
+    <div class="timeRow">
+      <label for="timeDateInput">Date (UTC)</label>
+      <input type="date" id="timeDateInput">
+    </div>
+    <div class="timeRow">
+      <label for="timeTimeInput">Time (UTC)</label>
+      <input type="time" id="timeTimeInput">
+    </div>
+    <div class="btn" id="useLiveTimeBtn" style="width:100%;text-align:center;margin-top:2px;">Use live time</div>
+  </div>
+</div>
+
+<div class="hud" id="legend">
+  <b>Drag</b> to rotate<br>
+  <b>Scroll / Pinch</b> to zoom<br>
+  <b>Right-drag</b> to pan
+</div>
+
+<div class="hud" id="hint">scroll to zoom in on the planet</div>
+
+<div id="credit">Earth imagery: Solar System Scope (CC BY 4.0)</div>
+
+<div id="photosphereToggleBtn" title="360° panoramas">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#eaf0f6" stroke-width="1.6">
+    <ellipse cx="12" cy="12" rx="9" ry="4"/>
+    <circle cx="12" cy="12" r="9"/>
+    <circle cx="12" cy="12" r="1.6" fill="#eaf0f6" stroke="none"/>
+  </svg>
+</div>
+
+<div id="panoOverlay">
+  <canvas id="panoCanvas"></canvas>
+  <div id="panoClose">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+    Back to Earth
+  </div>
+  <div id="panoTitle"></div>
+  <div id="panoLoading">Loading panorama…</div>
+</div>
+
+<div id="clusterPopup">
+  <div id="clusterPopupList"></div>
+</div>
+
+<div id="mobileBackdrop"></div>
+<div id="mobileSettingsBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#eaf0f6" stroke-width="1.6">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- basic setup ----------
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 2000);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+renderer.domElement.addEventListener('webglcontextlost', (e)=>{
+  e.preventDefault();
+  console.error('WebGL context lost');
+  const msg = document.createElement('div');
+  msg.style.cssText = 'position:fixed;inset:0;z-index:100;background:#03050a;color:#eaf0f6;display:flex;align-items:center;justify-content:center;font-family:\'Sorts Mill Goudy\',serif;font-size:13px;letter-spacing:.08em;text-align:center;padding:40px;';
+  msg.innerHTML = 'Graphics context was lost (often a low-memory or driver hiccup).<br><br><button style="margin-top:8px;padding:10px 20px;background:#4fd1ff;border:none;border-radius:2px;cursor:pointer;font-size:12px;letter-spacing:.1em;" onclick="location.reload()">Reload</button>';
+  document.body.appendChild(msg);
+});
+
+const EARTH_RADIUS = 5;
+
+// The vertical FOV above is fixed, but the resulting HORIZONTAL fov shrinks on a narrow
+// (portrait/mobile) aspect ratio — a distance tuned to frame the globe nicely on a wide
+// desktop window crops it badly left/right on a tall phone screen. Pick a distance so the
+// globe's full angular width fits inside whichever FOV (horizontal or vertical) is more
+// restrictive, with a bit of margin for the UI chrome around it.
+function computeFitDistance(){
+  const aspect = window.innerWidth / window.innerHeight;
+  const vFovHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const hFovHalf = Math.atan(Math.tan(vFovHalf) * aspect);
+  const limitingHalf = Math.min(vFovHalf, hFovHalf);
+  const margin = 0.82; // fraction of the limiting half-FOV the globe's edge should reach
+  return EARTH_RADIUS / Math.sin(limitingHalf * margin);
+}
+let lastFitDistance = computeFitDistance();
+camera.position.set(0, 0, lastFitDistance);
+
+// The day map is a fixed 8192px-wide texture wrapped around the whole planet — beyond a
+// certain zoom depth there's no more real detail in it, only the GPU smoothing between
+// existing texels (i.e. blur). Rather than pick an arbitrary "close enough" distance,
+// this computes the actual distance at which screen pixel density (accounting for the
+// real device pixel ratio) first exceeds the texture's own texel density, using the same
+// perspective-projection math as the other DPI-aware effects in this file. Higher-DPI
+// displays and larger windows can legitimately zoom in further before hitting this limit;
+// smaller/lower-DPI ones hit it sooner — because that's genuinely where the blur starts
+// for that specific screen, not a fixed guess.
+const DAY_MAP_TEXTURE_WIDTH = 8192; // must match the actual day map texture's pixel width
+function computeMinZoomDistance(){
+  const pixelRatio = window.devicePixelRatio || 1;
+  const screenHeightPx = renderer.domElement.clientHeight * pixelRatio;
+  const fovRad = THREE.MathUtils.degToRad(camera.fov);
+  const distance = (screenHeightPx * Math.PI * EARTH_RADIUS) / (DAY_MAP_TEXTURE_WIDTH * Math.tan(fovRad/2));
+  // never allow the camera inside the atmosphere shell, regardless of what the DPI math says
+  return Math.max(distance, EARTH_RADIUS * 1.05);
+}
+
+// ---------- controls ----------
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = computeMinZoomDistance();
+controls.maxDistance = 40;
+controls.zoomSpeed = 0.7; // rotateSpeed is set dynamically each frame, see updateRotateSpeed()
+controls.panSpeed = 0.4;
+controls.enablePan = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.2345; // was 0.35 — cut by 33%
+
+// ---------- sun ----------
+// Sun direction is derived from the real subsolar point (the lat/lon where the sun is
+// currently directly overhead) based on the user's system clock, so the day/night
+// terminator actually matches real-world time instead of a fixed arbitrary angle.
+function getSubsolarLatLon(date){
+  const utcHours = date.getUTCHours() + date.getUTCMinutes()/60 + date.getUTCSeconds()/3600;
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear) / 86400000) + 1;
+
+  // solar declination (approximate)
+  const lat = 23.44 * Math.sin(2*Math.PI*(dayOfYear - 81)/365);
+
+  // sun sits over 0deg longitude at 12:00 UTC and moves 15deg/hour west from there
+  let lon = 15 * (12 - utcHours);
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+
+  return { lat, lon };
+}
+
+const sunWorldDir = new THREE.Vector3(1, 0, 0);
+const sunViewDir = new THREE.Vector3();
+
+// The globe normally tracks real UTC time, but the time/date widget lets someone pin it
+// to a specific moment to preview a different terminator position.
+let timeMode = 'live'; // 'live' | 'custom'
+let customDate = new Date();
+
+function getEffectiveDate(){
+  return timeMode === 'custom' ? customDate : new Date();
+}
+
+function updateSunFromClock(){
+  const { lat, lon } = getSubsolarLatLon(getEffectiveDate());
+  sunWorldDir.copy(latLonToLocalVector(lat, lon));
+}
+updateSunFromClock();
+setInterval(updateSunFromClock, 60000); // live mode moves slowly — refresh once a minute
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.copy(sunWorldDir).multiplyScalar(10);
+scene.add(sun);
+
+// ---------- visual sun in the sky (position/time accurate) ----------
+// Uses the exact same real subsolar direction (sunWorldDir) that drives the day/night
+// terminator — so the bright disc in the sky always points the same way the terminator
+// says it should, at whatever real or custom time is set.
+function createSunGlowTexture(){
+  const size = 512;
+  const c = size / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.globalCompositeOperation = 'lighter';
+
+  // soft outer glow first, as a backdrop for the spikes
+  const glow = ctx.createRadialGradient(c, c, 0, c, c, c);
+  glow.addColorStop(0.00, 'rgba(255,255,255,0.9)');
+  glow.addColorStop(0.10, 'rgba(255,250,235,0.55)');
+  glow.addColorStop(0.30, 'rgba(255,235,190,0.22)');
+  glow.addColorStop(0.60, 'rgba(255,215,160,0.08)');
+  glow.addColorStop(1.00, 'rgba(255,200,140,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  // a spike drawn as a thin tapered gradient triangle pointing outward from center
+  function drawSpike(angleRad, length, width, opacity){
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(angleRad);
+    const grad = ctx.createLinearGradient(0, 0, length, 0);
+    grad.addColorStop(0.00, `rgba(255,255,245,${opacity})`);
+    grad.addColorStop(0.15, `rgba(255,245,220,${opacity*0.55})`);
+    grad.addColorStop(1.00, 'rgba(255,220,170,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, -width/2);
+    ctx.lineTo(length, 0);
+    ctx.lineTo(0, width/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // four long primary spikes (classic cross starburst)
+  const R = size * 0.48;
+  drawSpike(0, R, 10, 1.0);
+  drawSpike(Math.PI/2, R, 10, 1.0);
+  drawSpike(Math.PI, R, 10, 1.0);
+  drawSpike(3*Math.PI/2, R, 10, 1.0);
+
+  // many thinner, shorter secondary rays around the rest of the circle
+  const rayCount = 16;
+  for(let i = 0; i < rayCount; i++){
+    const angle = (i / rayCount) * Math.PI * 2;
+    if(Math.abs(Math.sin(angle*2)) > 0.98) continue; // skip near the primary spikes
+    const len = R * (0.28 + Math.random()*0.3);
+    drawSpike(angle, len, 2.5, 0.35 + Math.random()*0.25);
+  }
+
+  // bright white core on top
+  const core = ctx.createRadialGradient(c, c, 0, c, c, size*0.09);
+  core.addColorStop(0.0, 'rgba(255,255,255,1)');
+  core.addColorStop(0.6, 'rgba(255,255,250,0.9)');
+  core.addColorStop(1.0, 'rgba(255,250,240,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(c, c, size*0.09, 0, Math.PI*2);
+  ctx.fill();
+
+  return new THREE.CanvasTexture(canvas);
+}
+const sunSpriteMat = new THREE.SpriteMaterial({
+  map: createSunGlowTexture(),
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const sunSprite = new THREE.Sprite(sunSpriteMat);
+sunSprite.scale.set(55, 55, 1);
+scene.add(sunSprite);
+
+function updateSunSprite(){
+  sunSprite.position.copy(sunWorldDir).multiplyScalar(380);
+}
+updateSunSprite();
+
+// ---------- sky: real Milky Way structure + star points ----------
+// ESO's real Milky Way panorama (eso0932a, ESO/S. Brunier). Both layers are fetched
+// at runtime from URLs (same pattern as the panorama photos below — nothing in this
+// file is embedded). Both are pre-reprojected (offline, not in this file) from the
+// source's native galactic coordinates into equatorial (RA/Dec) so they line up
+// correctly with the GMST-based sidereal rotation below: output column c = source
+// RA = 360*c/(width-1), output row r = Dec = 90 - 180*r/(height-1) — no horizontal
+// mirror (an earlier version of this file mirrored it, which came out backwards).
+// Two exposures are blended by zoom: the dim version close up (so it doesn't
+// overpower the planet when Earth fills the screen) crossfades to the bright,
+// higher-res version zoomed out.
+// Upload the reprojected files to your repo and point these at them:
+const SKY_IMAGE_URL = 'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/textures/eso_6k_equatorial.jpg';
+const SKY_DIM_IMAGE_URL = 'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/textures/milkyway_dim_equatorial.jpg';
+
+const skyGeo = new THREE.SphereGeometry(400, 64, 64);
+const skyMat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x000000 });
+const skySphere = new THREE.Mesh(skyGeo, skyMat);
+scene.add(skySphere);
+
+const dimSkyGeo = new THREE.SphereGeometry(398, 64, 64); // slightly smaller, avoids z-fighting
+const dimSkyMat = new THREE.MeshBasicMaterial({
+  side: THREE.BackSide, color: 0x000000, transparent: true, opacity: 0, depthWrite: false,
+});
+const dimSkySphere = new THREE.Mesh(dimSkyGeo, dimSkyMat);
+scene.add(dimSkySphere);
+
+function loadSkyLayer(dataUri, mat){
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    mat.color.set(0xffffff);
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // Same fix as the panorama viewer: no mipmaps, or the automatic mip-level
+    // selection blows up near the poles (U sweeps its full range in a tiny screen
+    // patch there) and smears stars into streaks radiating from the celestial poles.
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    mat.map = tex;
+    mat.needsUpdate = true;
+  };
+  img.src = dataUri;
+}
+loadSkyLayer(SKY_IMAGE_URL, skyMat);
+loadSkyLayer(SKY_DIM_IMAGE_URL, dimSkyMat);
+
+// Crossfade thresholds. SKY_BLEND_FAR is the default/reset view distance (100% bright) —
+// dimming kicks in zooming in from there. SKY_BLEND_NEAR is pulled in well before Earth
+// actually fills the screen (~13 units) so the transition spans real scrolling distance
+// instead of snapping over a single scroll tick — by the time Earth does fill the screen
+// you're already fully dim, with room to spare, rather than hitting exactly 100% right at
+// that one precise point.
+const SKY_BLEND_NEAR = 7.5;
+const SKY_BLEND_FAR = 15;
+let skyDimOpacityCurrent = 0;
+function updateSkyBlend(dt){
+  const dist = camera.position.length();
+  const raw = THREE.MathUtils.clamp((SKY_BLEND_FAR - dist) / (SKY_BLEND_FAR - SKY_BLEND_NEAR), 0, 1);
+  const target = raw * raw * (3 - 2 * raw); // smoothstep — eases in/out rather than linear
+  // ease toward the target rather than snapping — subtle inertia, not a heavy lag
+  const smoothing = 1 - Math.pow(0.001, dt);
+  skyDimOpacityCurrent += (target - skyDimOpacityCurrent) * smoothing;
+  dimSkyMat.opacity = skyDimOpacityCurrent;
+}
+
+// Sparse point-star layer for discrete pinpoints (the Milky Way texture above is glow
+// only). Weighted toward the galactic plane like a real sky, not uniformly random.
+function buildStarPoints(count, radius){
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count*3);
+  const colors = new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    const theta = Math.random()*Math.PI*2;
+    const galLat = (Math.random()-0.5) * Math.PI * (0.25 + Math.random()*0.75);
+    const phi = Math.PI/2 - galLat;
+    const r = radius;
+    positions[i*3]   = r*Math.sin(phi)*Math.cos(theta);
+    positions[i*3+1] = r*Math.sin(phi)*Math.sin(theta);
+    positions[i*3+2] = r*Math.cos(phi);
+    const c = 0.7 + Math.random()*0.3;
+    colors[i*3]=c; colors[i*3+1]=c; colors[i*3+2]=c + Math.random()*0.1;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+  const mat = new THREE.PointsMaterial({ size:0.55, vertexColors:true, sizeAttenuation:true, transparent:true, opacity:0.9 });
+  return new THREE.Points(geo, mat);
+}
+scene.add(buildStarPoints(3500, 395));
+
+// Real Greenwich Mean Sidereal Time from the current (or custom-set) UTC date. This is
+// what actually determines which stars are overhead at a given place and time — it gains
+// about 4 minutes a day on ordinary clock time, which is exactly why the visible night
+// sky gradually shifts through the seasons over the course of a year.
+function getGMSTDegrees(date){
+  const JD = date.getTime()/86400000 + 2440587.5;
+  const D = JD - 2451545.0;
+  let gmstHours = 18.697374558 + 24.06570982441908 * D;
+  gmstHours = ((gmstHours % 24) + 24) % 24;
+  return gmstHours * 15;
+}
+function updateSkyFromClock(){
+  // GMST is defined as the RA of the star currently crossing the Greenwich meridian, and
+  // latLonToLocalVector places Greenwich (lon=0) at world +X. Given how the sky sphere's
+  // own geometry places a raw (pre-rotation) RA around its Y axis, the rotation that puts
+  // the RA=GMST star at +X (matching Greenwich) works out to (π - GMST), not just -GMST —
+  // the sun/earth terminator (computed independently via latLonToLocalVector) was always
+  // correct, but the sky itself was sitting 180° around from where it should be.
+  const rot = Math.PI - THREE.MathUtils.degToRad(getGMSTDegrees(getEffectiveDate()));
+  skySphere.rotation.y = rot;
+  dimSkySphere.rotation.y = rot;
+}
+updateSkyFromClock();
+setInterval(updateSkyFromClock, 60000);
+setInterval(updateSunSprite, 60000);
+
+// ---------- texture loading (8K Solar System Scope set) ----------
+// Earth day/night/specular/cloud textures — same repo, same textures/ folder as
+// the sky layers above:
+const TEX_BASE = 'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/textures/';
+
+const manager = new THREE.LoadingManager();
+const loader = new THREE.TextureLoader(manager);
+loader.crossOrigin = 'anonymous';
+
+const loadFill = document.getElementById('loadFill');
+const loadPct = document.getElementById('loadPct');
+manager.onProgress = (url, loaded, total) => {
+  const pct = Math.round((loaded/total)*100);
+  loadFill.style.width = pct + '%';
+  loadPct.textContent = pct + '%';
+};
+
+function load(name){
+  return new Promise((resolve)=>{
+    loader.load(TEX_BASE+name, (t)=>resolve(t), undefined, ()=>{ console.warn('texture failed', name); resolve(null); });
+  });
+}
+
+const [dayTex, nightTex, specTex, cloudTex] = await Promise.all([
+  load('8k_earth_daymap.jpg'),
+  load('8k_earth_nightmap.jpg'),
+  load('8k_earth_specular_map.jpg'),
+  load('8k_earth_clouds.jpg'),
+]);
+
+
+[dayTex, nightTex, specTex, cloudTex].forEach(t=>{
+  if(!t) return;
+  t.anisotropy = 8;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+});
+if(dayTex) dayTex.colorSpace = THREE.SRGBColorSpace;
+if(nightTex) nightTex.colorSpace = THREE.SRGBColorSpace;
+
+// ---------- earth: single shader-driven mesh (day + night + specular + bump) ----------
+// A single material blending day/night by real sun angle keeps every layer in perfect
+// registration — no separate overlapping spheres, so nothing can drift out of alignment.
+const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 256, 256);
+
+const earthMat = new THREE.ShaderMaterial({
+  uniforms: {
+    dayMap:      { value: dayTex },
+    nightMap:    { value: nightTex },
+    specMap:     { value: specTex },
+    sunDirView:  { value: new THREE.Vector3(0,0,1) },
+    nightBoost:  { value: 0 },
+    patchMap:    { value: null },
+    patchBounds: { value: new THREE.Vector4(0,0,0,0) },
+    patchOn:     { value: 0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    varying vec3 vViewNormal;
+    void main(){
+      vUv = uv;
+      vViewNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D dayMap;
+    uniform sampler2D nightMap;
+    uniform sampler2D specMap;
+    uniform vec3 sunDirView;
+    uniform float nightBoost;
+    uniform sampler2D patchMap;
+    uniform vec4 patchBounds;
+    uniform float patchOn;
+    varying vec2 vUv;
+    varying vec3 vViewNormal;
+
+    void main(){
+      vec3 n = normalize(vViewNormal);
+
+      float intensity = dot(n, normalize(sunDirView));
+      float dayFactor = smoothstep(-0.24, 0.24, intensity);
+
+      vec3 dayColor = texture2D(dayMap, vUv).rgb;
+
+      if(patchOn > 0.5 && vUv.x > patchBounds.x && vUv.x < patchBounds.y && vUv.y > patchBounds.z && vUv.y < patchBounds.w){
+        vec2 pUv = vec2(
+          (vUv.x - patchBounds.x) / (patchBounds.y - patchBounds.x),
+          (vUv.y - patchBounds.z) / (patchBounds.w - patchBounds.z)
+        );
+        vec3 patchColor = texture2D(patchMap, pUv).rgb;
+        float edge = smoothstep(0.0, 0.06, min(min(pUv.x, 1.0-pUv.x), min(pUv.y, 1.0-pUv.y)));
+        dayColor = mix(dayColor, patchColor, edge);
+      }
+
+      vec3 nightLights = texture2D(nightMap, vUv).rgb * 1.35;
+      float specMask = texture2D(specMap, vUv).r;
+      float specHi = pow(max(intensity, 0.0), 14.0) * specMask * 0.6;
+
+      // Faint 'moonlit' rendition of the day map for the night side, so coastlines and
+      // continents stay visible instead of going pure black; city lights sit on top of it.
+      // nightBoost (driven purely by camera distance, see updateNightBoost in JS) softly
+      // brightens this the closer you zoom in, fully fading to the actual day-texture
+      // brightness at maximum zoom so the surface is genuinely visible up close regardless
+      // of day/night, then fades back down to a normal dark night as you pull back out.
+      float lum = dot(dayColor, vec3(0.299, 0.587, 0.114));
+      vec3 dimTint = vec3(0.24, 0.27, 0.36);
+      vec3 nearTint = vec3(1.0, 1.0, 1.0);
+      vec3 tint = mix(dimTint, nearTint, nightBoost);
+      float desat = mix(0.5, 1.0, nightBoost);
+      vec3 moonlit = mix(vec3(lum), dayColor, desat) * tint;
+      vec3 nightSide = moonlit + nightLights * (1.0 - nightBoost);
+
+      vec3 dayColorFull = dayColor + vec3(specHi);
+      vec3 color = mix(nightSide, dayColorFull, dayFactor);
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+});
+const earth = new THREE.Mesh(earthGeo, earthMat);
+
+// ---------- clouds: real cloud-cover texture, alpha-from-luminance, day/night shaded ----------
+const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS*1.012, 200, 200);
+const cloudMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  uniforms: {
+    cloudMap:   { value: cloudTex },
+    sunDirView: { value: new THREE.Vector3(0,0,1) },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    varying vec3 vViewNormal;
+    void main(){
+      vUv = uv;
+      vViewNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D cloudMap;
+    uniform vec3 sunDirView;
+    varying vec2 vUv;
+    varying vec3 vViewNormal;
+    void main(){
+      float density = texture2D(cloudMap, vUv).r;
+      float intensity = clamp(dot(normalize(vViewNormal), normalize(sunDirView)), 0.0, 1.0);
+      float shade = 0.22 + 0.78 * intensity;
+      vec3 color = vec3(shade);
+      float alpha = smoothstep(0.08, 0.55, density) * 0.85;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `,
+});
+const clouds = new THREE.Mesh(cloudGeo, cloudMat);
+
+// atmosphere glow (fresnel rim-light using the actual per-fragment view direction, not a
+// fixed screen-space approximation — the old version approximated "facing the camera" as
+// a constant direction, which only holds when the planet is small in frame; up close it
+// misjudged most of the visible surface as grazing, flooding the whole view with glow)
+const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS*1.016, 96, 96); // ~100km/6371km real ratio
+const atmoMat = new THREE.ShaderMaterial({
+  transparent: true,
+  side: THREE.BackSide,
+  uniforms: {
+    glowColor: { value: new THREE.Color(0x4fb8ff) },
+  },
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    void main(){
+      vNormal = normalize(normalMatrix * normal);
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      vViewPosition = -mvPosition.xyz;
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    uniform vec3 glowColor;
+    void main(){
+      vec3 n = normalize(vNormal);
+      vec3 viewDir = normalize(vViewPosition);
+      // abs() sidesteps which side the normal points on a BackSide mesh — near 0 exactly
+      // at grazing/limb angles regardless, near 1 when squarely facing toward or away
+      float facing = abs(dot(n, viewDir));
+      float intensity = pow(1.0 - facing, 3.0);
+      gl_FragColor = vec4(glowColor, 1.0) * intensity;
+    }
+  `,
+});
+const atmosphere = new THREE.Mesh(atmoGeo, atmoMat);
+
+// destination marker (shown after a search flight completes)
+const MARKER_BASE_RADIUS = 0.045; // matches markerCore's authored geometry radius below
+const marker = new THREE.Group();
+const markerCore = new THREE.Mesh(
+  new THREE.SphereGeometry(0.045, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0x4fd1ff })
+);
+const markerRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.09, 0.11, 32),
+  new THREE.MeshBasicMaterial({ color: 0x4fd1ff, side: THREE.DoubleSide, transparent:true, opacity:0.8 })
+);
+marker.add(markerCore, markerRing);
+marker.visible = false;
+
+// ---------- photosphere (360 panorama) layer — framework for a future Street View-style
+// feature. PANORAMAS is empty for now (no panoramas captured/added yet), but the whole
+// pipeline — data shape, real lat/lon placement, constant-on-screen marker size, toggle —
+// is in place ready to populate. Add entries here (or push to PANORAMAS + call
+// buildPhotosphereMarkers() again) once real panoramas exist.
+const PANORAMAS = [
+  // { id:'example', name:'Example Location', lat:0, lon:0, imageUrl:'https://.../pano.jpg' },
+  { id:'hooker-lake', name:'Hooker Lake', lat:-43.688738, lon:170.103761,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/hooker_lake.jpg' },
+  { id:'bishop-ca', name:'Bishop, CA', lat:37.3639, lon:-118.3952,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Bishop%2C%20CA.jpg' },
+  { id:'artist-point-wa', name:'Artist Point, WA', lat:48.8578, lon:-121.6892,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Artist%20point%2C%20WA.jpg' },
+  { id:'bryce-canyon-ut', name:'North Campground, Bryce Canyon, UT', lat:37.635849, lon:-112.165612,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Bryce%20Canyon%2C%20UT.jpg' },
+  { id:'bryce-canyon-ut-sunset', name:'Sunset Campground, Bryce Canyon, UT', lat:37.620929, lon:-112.176882,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Bryce%20Canyon%2C%20UT%20(second%20site).jpg' },
+];
+const PHOTOSPHERE_MARKER_BASE_RADIUS = 0.05;
+const photosphereGroup = new THREE.Group();
+photosphereGroup.visible = false;
+
+function buildPhotosphereMarkers(){
+  while(photosphereGroup.children.length){
+    const child = photosphereGroup.children.pop();
+    child.geometry.dispose();
+    child.material.dispose();
+  }
+  for(const pano of PANORAMAS){
+    const geo = new THREE.SphereGeometry(PHOTOSPHERE_MARKER_BASE_RADIUS, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x4fd1ff, transparent:true, opacity:0.85 });
+    const mesh = new THREE.Mesh(geo, mat);
+    const dir = latLonToLocalVector(pano.lat, pano.lon);
+    mesh.position.copy(dir).multiplyScalar(EARTH_RADIUS * 1.005);
+    mesh.userData.pano = pano; // ready for click-to-open once a pano viewer exists
+    photosphereGroup.add(mesh);
+  }
+}
+buildPhotosphereMarkers();
+
+const PHOTOSPHERE_MARKER_PIXEL_RADIUS = 7; // on-screen dot radius, px — shared by sizing and clustering below
+function updatePhotosphereMarkerScale(){
+  if(!photosphereGroup.visible) return;
+  const fovRad = THREE.MathUtils.degToRad(camera.fov);
+  const viewHeight = renderer.domElement.clientHeight || window.innerHeight;
+  for(const m of photosphereGroup.children){
+    const worldPos = new THREE.Vector3();
+    m.getWorldPosition(worldPos);
+    const dist = camera.position.distanceTo(worldPos);
+    const worldRadius = 2 * PHOTOSPHERE_MARKER_PIXEL_RADIUS * dist * Math.tan(fovRad/2) / viewHeight;
+    m.scale.setScalar(worldRadius / PHOTOSPHERE_MARKER_BASE_RADIUS);
+  }
+}
+
+// At max zoom-in, two nearby panorama markers can land almost on top of each other on
+// screen. Each frame, group markers whose dots are genuinely overlapping (not just close)
+// and show only one (still just the same blue dot) per group; the others in the group are
+// hidden and their panos are attached to the visible one's userData.cluster so the click
+// handler can offer a picker instead of jumping straight into a single pano.
+// "Overlapping" is defined as >50% of one dot's area covered by the other — for two equal
+// circles that happens once their centers are within ~0.808x the radius of each other
+// (solved from the standard circle-intersection-area formula), not just "visually close".
+const CLUSTER_PIXEL_THRESHOLD = PHOTOSPHERE_MARKER_PIXEL_RADIUS * 0.808;
+const clusterProjectPos = new THREE.Vector3();
+function updatePhotosphereClusters(){
+  if(!photosphereGroup.visible) return;
+  const viewW = renderer.domElement.clientWidth || window.innerWidth;
+  const viewH = renderer.domElement.clientHeight || window.innerHeight;
+  const projected = photosphereGroup.children.map(mesh=>{
+    clusterProjectPos.setFromMatrixPosition(mesh.matrixWorld).project(camera);
+    return { mesh, x:(clusterProjectPos.x*0.5+0.5)*viewW, y:(-clusterProjectPos.y*0.5+0.5)*viewH };
+  });
+  const used = new Array(projected.length).fill(false);
+  for(let i=0;i<projected.length;i++){
+    if(used[i]) continue;
+    const group = [projected[i]];
+    used[i] = true;
+    for(let j=i+1;j<projected.length;j++){
+      if(used[j]) continue;
+      if(Math.hypot(projected[i].x-projected[j].x, projected[i].y-projected[j].y) < CLUSTER_PIXEL_THRESHOLD){
+        group.push(projected[j]); used[j] = true;
+      }
+    }
+    group[0].mesh.visible = true;
+    group[0].mesh.userData.cluster = group.map(g => g.mesh.userData.pano);
+    for(let k=1;k<group.length;k++) group[k].mesh.visible = false;
+  }
+}
+
+// group holding everything earth-related — kept upright so the poles sit vertically
+const tiltGroup = new THREE.Group();
+tiltGroup.add(earth, clouds, atmosphere, marker, photosphereGroup);
+scene.add(tiltGroup);
+
+// ---------- veil off ----------
+const veil = document.getElementById('veil');
+setTimeout(()=>{ veil.style.opacity='0'; setTimeout(()=>veil.remove(), 850); }, 350);
+
+// ---------- hint fade ----------
+const hint = document.getElementById('hint');
+let hintShown = true;
+function hideHint(){ if(hintShown){ hintShown=false; hint.style.opacity='0'; } }
+renderer.domElement.addEventListener('wheel', hideHint, {once:true});
+renderer.domElement.addEventListener('pointerdown', hideHint, {once:true});
+
+// ---------- legend fade ----------
+const legend = document.getElementById('legend');
+setTimeout(()=> legend.classList.add('faded'), 6000);
+
+// ---------- UI toggles ----------
+const btnClouds = document.getElementById('toggleClouds');
+const btnSpin   = document.getElementById('toggleSpin');
+const btnReset  = document.getElementById('resetView');
+
+// ---------- photosphere layer toggle ----------
+const photosphereToggleBtn = document.getElementById('photosphereToggleBtn');
+let photosphereLayerOn = false;
+photosphereToggleBtn.addEventListener('click', ()=>{
+  photosphereLayerOn = !photosphereLayerOn;
+  photosphereGroup.visible = photosphereLayerOn;
+  photosphereToggleBtn.classList.toggle('active', photosphereLayerOn);
+});
+
+// ---------- 360 panorama viewer ----------
+// A fully separate scene/camera/renderer from the main globe view, deliberately — this is
+// the key bug-prevention measure: the panorama's own canvas sits on top of and completely
+// covers the main canvas while open, so drag/scroll/touch events naturally target the
+// panorama (standard DOM hit-testing), never reaching the main OrbitControls underneath.
+// As a second, explicit safeguard, the main render/update loop also hard-skips itself
+// entirely (see the early-return in animate()) whenever the panorama is open, so nothing
+// about the globe — camera position, auto-rotate, damping momentum — can change while
+// you're looking around inside a panorama, regardless of what triggered the input.
+let panoramaViewerOpen = false;
+const panoOverlay = document.getElementById('panoOverlay');
+const panoCanvas = document.getElementById('panoCanvas');
+const panoCloseBtn = document.getElementById('panoClose');
+const panoTitleEl = document.getElementById('panoTitle');
+const panoLoadingEl = document.getElementById('panoLoading');
+
+const panoScene = new THREE.Scene();
+const panoCamera = new THREE.PerspectiveCamera(75, 1, 0.1, 100);
+panoCamera.rotation.order = 'YXZ'; // yaw then pitch, avoids roll drift from combined euler rotation
+const panoRenderer = new THREE.WebGLRenderer({ canvas: panoCanvas, antialias:true });
+panoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const panoSphereGeo = new THREE.SphereGeometry(50, 64, 40);
+const panoMat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x000000 });
+const panoSphere = new THREE.Mesh(panoSphereGeo, panoMat);
+panoScene.add(panoSphere);
+
+let panoYaw = 0, panoPitch = 0;
+const PANO_FOV_MIN = 35, PANO_FOV_MAX = 100;
+
+function resizePanoRenderer(){
+  const w = panoCanvas.clientWidth || window.innerWidth;
+  const h = panoCanvas.clientHeight || window.innerHeight;
+  panoCamera.aspect = w / h;
+  panoCamera.updateProjectionMatrix();
+  panoRenderer.setSize(w, h, false);
+}
+
+function openPanoramaViewer(pano){
+  panoramaViewerOpen = true;
+  panoOverlay.classList.add('open');
+  panoTitleEl.textContent = pano.name || '';
+  panoYaw = 0; panoPitch = 0;
+  panoCamera.rotation.set(0, 0, 0);
+  panoCamera.fov = 75;
+  panoCamera.updateProjectionMatrix();
+  resizePanoRenderer();
+
+  panoMat.color.set(0x000000);
+  panoLoadingEl.classList.add('show');
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // No mipmaps: near the poles of an equirectangular sphere the U (longitude) coordinate
+    // sweeps its full range within a tiny screen-space patch, so automatic mip-level
+    // selection blows up there and picks a heavily-blurred mip — smearing point-source
+    // stars into streaks radiating from the zenith/nadir. Flat linear filtering avoids that
+    // derivative blowup entirely (this is what photo-sphere-viewer does too).
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    // Mirrored horizontally — same fix as the Milky Way sky sphere earlier: viewed from
+    // inside a sphere (BackSide), a texture applied the normal way comes out flipped
+    // left-right, since the winding that reads correctly from outside a sphere mirrors
+    // once you're looking at it from within.
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.x = -1;
+    tex.offset.x = 1;
+    const old = panoMat.map;
+    panoMat.map = tex;
+    panoMat.color.set(0xffffff);
+    panoMat.needsUpdate = true;
+    if(old) old.dispose();
+    panoLoadingEl.classList.remove('show');
+  };
+  img.onerror = () => {
+    panoLoadingEl.textContent = 'Could not load this panorama';
+  };
+  img.src = pano.imageUrl;
+}
+
+function closePanoramaViewer(){
+  panoramaViewerOpen = false;
+  panoOverlay.classList.remove('open');
+}
+panoCloseBtn.addEventListener('click', closePanoramaViewer);
+document.addEventListener('keydown', (e)=>{
+  if(e.key !== 'Escape') return;
+  if(panoramaViewerOpen) closePanoramaViewer();
+  else if(clusterPopup.classList.contains('open')) closeClusterPopup();
+});
+
+// drag-to-look — Pointer Events unify mouse and touch, so this one handler covers both
+let panoDragging = false;
+let panoLastX = 0, panoLastY = 0;
+const PANO_LOOK_SPEED_AT_DEFAULT_FOV = 0.0035; // tuned by feel at the default 75° FOV
+const PANO_DEFAULT_FOV = 75;
+// Radians-per-pixel should track the current FOV, not stay fixed — a fixed speed means
+// dragging the same distance rotates the view by the same angle regardless of zoom, but
+// at a narrow (zoomed-in) FOV that same angle sweeps across far more screen content, so
+// it feels like it's panning too fast. Scaling linearly with FOV keeps content under the
+// cursor roughly in place while dragging, at any zoom level.
+function panoLookSpeed(){
+  return PANO_LOOK_SPEED_AT_DEFAULT_FOV * (panoCamera.fov / PANO_DEFAULT_FOV);
+}
+
+panoCanvas.addEventListener('pointerdown', (e)=>{
+  panoDragging = true;
+  panoLastX = e.clientX; panoLastY = e.clientY;
+  panoCanvas.setPointerCapture(e.pointerId);
+});
+panoCanvas.addEventListener('pointermove', (e)=>{
+  if(!panoDragging) return;
+  const dx = e.clientX - panoLastX;
+  const dy = e.clientY - panoLastY;
+  panoLastX = e.clientX; panoLastY = e.clientY;
+  const speed = panoLookSpeed();
+  panoYaw += dx * speed;
+  panoPitch = THREE.MathUtils.clamp(panoPitch + dy * speed, -Math.PI/2 + 0.01, Math.PI/2 - 0.01);
+});
+function panoEndDrag(){ panoDragging = false; }
+panoCanvas.addEventListener('pointerup', panoEndDrag);
+panoCanvas.addEventListener('pointercancel', panoEndDrag);
+
+// scroll-wheel zoom (desktop)
+panoCanvas.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  panoCamera.fov = THREE.MathUtils.clamp(panoCamera.fov + e.deltaY * 0.04, PANO_FOV_MIN, PANO_FOV_MAX);
+  panoCamera.updateProjectionMatrix();
+}, { passive:false });
+
+// pinch-to-zoom (mobile) — tracked independently of the single-pointer drag above
+const panoActiveTouches = new Map();
+let panoPinchStartDist = null;
+let panoPinchStartFov = 75;
+panoCanvas.addEventListener('pointerdown', (e)=>{
+  if(e.pointerType !== 'touch') return;
+  panoActiveTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(panoActiveTouches.size === 2){
+    panoDragging = false; // hand off from single-finger look to pinch
+    const pts = [...panoActiveTouches.values()];
+    panoPinchStartDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    panoPinchStartFov = panoCamera.fov;
+  }
+});
+panoCanvas.addEventListener('pointermove', (e)=>{
+  if(e.pointerType !== 'touch' || !panoActiveTouches.has(e.pointerId)) return;
+  panoActiveTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(panoActiveTouches.size === 2 && panoPinchStartDist){
+    const pts = [...panoActiveTouches.values()];
+    const dist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+    const scale = panoPinchStartDist / Math.max(dist, 1);
+    panoCamera.fov = THREE.MathUtils.clamp(panoPinchStartFov * scale, PANO_FOV_MIN, PANO_FOV_MAX);
+    panoCamera.updateProjectionMatrix();
+  }
+});
+function panoEndTouch(e){
+  panoActiveTouches.delete(e.pointerId);
+  if(panoActiveTouches.size < 2) panoPinchStartDist = null;
+}
+panoCanvas.addEventListener('pointerup', panoEndTouch);
+panoCanvas.addEventListener('pointercancel', panoEndTouch);
+
+function renderPanoramaFrame(){
+  panoCamera.rotation.y = panoYaw;
+  panoCamera.rotation.x = panoPitch;
+  panoRenderer.render(panoScene, panoCamera);
+}
+
+// click-to-open: raycast against the (already existing, currently empty) photosphere
+// markers on the MAIN canvas — uses the 'click' event specifically rather than
+// pointerdown, since click only fires after a tap/click without a significant drag in
+// between, so this never fires by accident mid-way through rotating the globe.
+const panoRaycaster = new THREE.Raycaster();
+const panoClickNDC = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (e)=>{
+  if(!photosphereGroup.visible || panoramaViewerOpen) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  panoClickNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  panoClickNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  panoRaycaster.setFromCamera(panoClickNDC, camera);
+  const hits = panoRaycaster.intersectObjects(photosphereGroup.children.filter(m => m.visible));
+  if(hits.length > 0){
+    const cluster = hits[0].object.userData.cluster || [hits[0].object.userData.pano];
+    if(cluster.length > 1){
+      e.stopPropagation(); // this same click bubbles to document — don't let it instantly close the popup we're about to open
+      openClusterPopup(cluster, e.clientX, e.clientY);
+    } else {
+      openPanoramaViewer(cluster[0]);
+    }
+  }
+});
+
+// ---------- cluster picker popup ----------
+const clusterPopup = document.getElementById('clusterPopup');
+const clusterPopupList = document.getElementById('clusterPopupList');
+function openClusterPopup(panos, clientX, clientY){
+  clusterPopupList.innerHTML = '';
+  panos.forEach(pano=>{
+    const row = document.createElement('div');
+    row.className = 'clusterRow';
+    row.style.backgroundImage = `url('${pano.imageUrl}')`;
+    const label = document.createElement('div');
+    label.className = 'clusterRowLabel';
+    label.textContent = pano.name || pano.id;
+    row.appendChild(label);
+    row.addEventListener('click', ()=>{ closeClusterPopup(); openPanoramaViewer(pano); });
+    clusterPopupList.appendChild(row);
+  });
+  clusterPopup.style.left = clientX + 'px';
+  clusterPopup.style.top = clientY + 'px';
+  clusterPopup.classList.add('open');
+}
+function closeClusterPopup(){ clusterPopup.classList.remove('open'); }
+document.addEventListener('click', (e)=>{
+  if(clusterPopup.classList.contains('open') && !e.target.closest('#clusterPopup')) closeClusterPopup();
+});
+controls.addEventListener('start', closeClusterPopup); // real user interaction only — 'change' fires every frame due to damping, even at rest
+
+// ---------- mobile settings sheet ----------
+const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
+const mobileBackdrop = document.getElementById('mobileBackdrop');
+const mobileSheetClose = document.getElementById('mobileSheetClose');
+const controlsPanelEl = document.getElementById('controlsPanel');
+
+function openMobileSheet(){
+  controlsPanelEl.classList.add('mobileOpen');
+  mobileBackdrop.classList.add('show');
+}
+function closeMobileSheet(){
+  controlsPanelEl.classList.remove('mobileOpen');
+  mobileBackdrop.classList.remove('show');
+}
+mobileSettingsBtn.addEventListener('click', ()=>{
+  if(controlsPanelEl.classList.contains('mobileOpen')) closeMobileSheet();
+  else openMobileSheet();
+});
+mobileBackdrop.addEventListener('click', closeMobileSheet);
+mobileSheetClose.addEventListener('click', closeMobileSheet);
+
+let cloudsOn = true, spinOn = true;
+let zoomZone = 'out'; // tracks whether we're currently in the 'zoomed in' or 'zoomed out' regime
+const ZOOM_IN_ENGAGE   = EARTH_RADIUS * 2.0; // crossing below this while zoomed out -> stop spinning
+const ZOOM_OUT_RELEASE = EARTH_RADIUS * 2.8; // crossing above this while zoomed in -> resume spinning
+
+function updateAutoRotateForZoom(){
+  const dist = camera.position.length();
+  if(zoomZone === 'out' && dist < ZOOM_IN_ENGAGE){
+    zoomZone = 'in';
+    if(spinOn){ spinOn = false; controls.autoRotate = false; btnSpin.classList.remove('active'); btnSpin.textContent = 'Auto-rotate: off'; }
+  } else if(zoomZone === 'in' && dist > ZOOM_OUT_RELEASE){
+    zoomZone = 'out';
+    if(!spinOn){ spinOn = true; controls.autoRotate = true; btnSpin.classList.add('active'); btnSpin.textContent = 'Auto-rotate: on'; }
+  }
+}
+
+btnClouds.onclick = ()=>{
+  cloudsOn = !cloudsOn;
+  clouds.visible = cloudsOn;
+  btnClouds.textContent = 'Clouds: ' + (cloudsOn?'on':'off');
+  btnClouds.classList.toggle('active', cloudsOn);
+};
+btnSpin.onclick = ()=>{
+  spinOn = !spinOn;
+  controls.autoRotate = spinOn;
+  btnSpin.textContent = 'Auto-rotate: ' + (spinOn?'on':'off');
+  btnSpin.classList.toggle('active', spinOn);
+};
+btnReset.onclick = ()=>{
+  flight = null;
+  controls.enabled = true;
+  controls.target.set(0,0,0);
+  lastFitDistance = computeFitDistance();
+  camera.position.set(0, 0, lastFitDistance);
+  spinOn = true; controls.autoRotate = true;
+  zoomZone = 'out';
+  btnSpin.classList.add('active'); btnSpin.textContent = 'Auto-rotate: on';
+  marker.visible = false;
+};
+
+// ---------- time & date widget ----------
+const btnTimeToggle = document.getElementById('toggleTimePanel');
+const timePanel = document.getElementById('timePanel');
+const timeDateInput = document.getElementById('timeDateInput');
+const timeTimeInput = document.getElementById('timeTimeInput');
+const btnUseLiveTime = document.getElementById('useLiveTimeBtn');
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fillTimeInputsFrom(date){
+  timeDateInput.value = `${date.getUTCFullYear()}-${pad2(date.getUTCMonth()+1)}-${pad2(date.getUTCDate())}`;
+  timeTimeInput.value = `${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}`;
+}
+
+btnTimeToggle.onclick = (e)=>{
+  e.stopPropagation();
+  const opening = !timePanel.classList.contains('open');
+  timePanel.classList.toggle('open', opening);
+  if(opening) fillTimeInputsFrom(getEffectiveDate());
+};
+timePanel.addEventListener('click', (e)=> e.stopPropagation());
+document.addEventListener('click', ()=> timePanel.classList.remove('open'));
+
+function applyCustomTimeFromInputs(){
+  if(!timeDateInput.value || !timeTimeInput.value) return;
+  const [y, mo, d] = timeDateInput.value.split('-').map(Number);
+  const [h, mi] = timeTimeInput.value.split(':').map(Number);
+  customDate = new Date(Date.UTC(y, mo-1, d, h, mi));
+  timeMode = 'custom';
+  updateSunFromClock();
+  updateSkyFromClock();
+  updateSunSprite();
+  btnTimeToggle.textContent = `Time: ${pad2(mo)}/${pad2(d)} ${pad2(h)}:${pad2(mi)} UTC`;
+  btnTimeToggle.classList.add('active');
+}
+timeDateInput.addEventListener('change', applyCustomTimeFromInputs);
+timeTimeInput.addEventListener('change', applyCustomTimeFromInputs);
+
+btnUseLiveTime.onclick = (e)=>{
+  e.stopPropagation();
+  timeMode = 'live';
+  updateSunFromClock();
+  updateSkyFromClock();
+  updateSunSprite();
+  fillTimeInputsFrom(new Date());
+  btnTimeToggle.textContent = 'Time: Live (UTC)';
+  btnTimeToggle.classList.remove('active');
+};
+
+// ---------- coordinate readout ----------
+const latEl = document.getElementById('lat');
+const lonEl = document.getElementById('lon');
+const altEl = document.getElementById('alt');
+const compassN = document.getElementById('compassN');
+
+let currentLat = 0, currentLon = 0;
+
+function updateReadout(){
+  const dir = camera.position.clone().normalize();
+  const localDir = dir.clone().applyMatrix4(new THREE.Matrix4().makeRotationZ(-tiltGroup.rotation.z));
+  const lat = 90 - THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(localDir.y,-1,1)));
+  let lon = THREE.MathUtils.radToDeg(Math.atan2(-localDir.z, localDir.x));
+  if(lon < -180) lon += 360;
+  if(lon > 180) lon -= 360;
+  currentLat = lat;
+  currentLon = lon;
+
+  latEl.textContent = (lat>=0? lat.toFixed(1)+'°N' : (-lat).toFixed(1)+'°S');
+  lonEl.textContent = (lon>=0? lon.toFixed(1)+'°E' : (-lon).toFixed(1)+'°W');
+
+  const altKm = (camera.position.length() - EARTH_RADIUS) / EARTH_RADIUS * 6371;
+  altEl.textContent = Math.max(0, Math.round(altKm)).toLocaleString();
+
+  const screenUp = new THREE.Vector3(0,1,0).project(camera);
+  const screenCenter = new THREE.Vector3(0,0,0).project(camera);
+  const angle = Math.atan2(screenUp.x-screenCenter.x, screenUp.y-screenCenter.y);
+  compassN.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(angle)} 26 26)`);
+}
+
+// ---------- high-res detail patch (Esri World Imagery) ----------
+// Fetches just a small lat/lon box around wherever the camera is looking, via Esri's
+// ArcGIS REST "export" operation — free, no API key, and (unlike a slippy-map tile
+// pyramid) it accepts an arbitrary bounding box directly in plain lat/lon, so no Web
+// Mercator reprojection is needed; the result drops straight into the same UV space as
+// the day map. Re-fetched only when the view drifts near the edge of the loaded patch,
+// and only while zoomed in close enough to matter.
+const ESRI_EXPORT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export';
+let patchState = 'idle';
+let patchBoundsDeg = null;
+let patchCooldownUntil = 0;
+
+function lonLatToUv(lat, lon){
+  let u = 0.5 + lon/360;
+  u = ((u % 1) + 1) % 1;
+  const v = 0.5 + lat/180;
+  return { u, v };
+}
+
+async function loadDetailPatch(centerLat, centerLon, halfSizeDeg){
+  if(patchState === 'loading') return;
+  patchState = 'loading';
+
+  const west  = Math.max(-180, centerLon - halfSizeDeg);
+  const east  = Math.min(180, centerLon + halfSizeDeg);
+  const south = Math.max(-90, centerLat - halfSizeDeg);
+  const north = Math.min(90, centerLat + halfSizeDeg);
+
+  const url = `${ESRI_EXPORT_URL}?bbox=${west.toFixed(4)},${south.toFixed(4)},${east.toFixed(4)},${north.toFixed(4)}`
+    + `&bboxSR=4326&imageSR=4326&size=1024,1024&format=jpg&f=image`;
+
+  try{
+    const img = new Image();
+    await new Promise((resolve, reject)=>{
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = url;
+    });
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.anisotropy = 8;
+
+    const old = earthMat.uniforms.patchMap.value;
+    earthMat.uniforms.patchMap.value = tex;
+    const { u: uMin, v: vMin } = lonLatToUv(south, west);
+    const { u: uMax, v: vMax } = lonLatToUv(north, east);
+    earthMat.uniforms.patchBounds.value.set(uMin, uMax, vMin, vMax);
+    earthMat.uniforms.patchOn.value = 1;
+    if(old) old.dispose();
+
+    patchBoundsDeg = { west, east, south, north };
+    patchCooldownUntil = performance.now() + 1200;
+  }catch(err){
+    console.warn('detail patch load failed, staying on base texture:', err);
+  }finally{
+    patchState = 'idle';
+  }
+}
+
+const PATCH_TRIGGER_DIST = EARTH_RADIUS * 2.2;
+function checkDetailPatchTrigger(){
+  const dist = camera.position.length();
+  if(dist >= PATCH_TRIGGER_DIST){
+    if(earthMat.uniforms.patchOn.value !== 0){ earthMat.uniforms.patchOn.value = 0; patchBoundsDeg = null; }
+    return;
+  }
+  if(patchState === 'loading' || performance.now() < patchCooldownUntil) return;
+
+  const altitudeT = THREE.MathUtils.clamp((dist - EARTH_RADIUS) / (PATCH_TRIGGER_DIST - EARTH_RADIUS), 0, 1);
+  const halfSize = THREE.MathUtils.lerp(3, 15, altitudeT);
+
+  const needsFetch = !patchBoundsDeg
+    || currentLat < patchBoundsDeg.south + halfSize*0.25 || currentLat > patchBoundsDeg.north - halfSize*0.25
+    || currentLon < patchBoundsDeg.west  + halfSize*0.25 || currentLon > patchBoundsDeg.east  - halfSize*0.25;
+
+  if(needsFetch) loadDetailPatch(currentLat, currentLon, halfSize);
+}
+
+
+// Converts geographic lat/lon into the local unit vector that actually matches this
+// texture's UV layout (derived from THREE.SphereGeometry's own u/v -> theta/phi mapping,
+// assuming a standard equirectangular map with the prime meridian at image-center).
+function latLonToLocalVector(lat, lon){
+  const latRad = THREE.MathUtils.degToRad(lat);
+  const lonRad = THREE.MathUtils.degToRad(lon);
+  const x = Math.cos(lonRad) * Math.cos(latRad);
+  const y = Math.sin(latRad);
+  const z = -Math.sin(lonRad) * Math.cos(latRad);
+  return new THREE.Vector3(x, y, z);
+}
+
+// ---------- fly-to search ----------
+const LOCATIONS = [
+  // cities
+  {name:'New York', category:'City', lat:40.7128, lon:-74.0060},
+  {name:'London', category:'City', lat:51.5074, lon:-0.1278},
+  {name:'Paris', category:'City', lat:48.8566, lon:2.3522},
+  {name:'Tokyo', category:'City', lat:35.6762, lon:139.6503},
+  {name:'Sydney', category:'City', lat:-33.8688, lon:151.2093},
+  {name:'Cairo', category:'City', lat:30.0444, lon:31.2357},
+  {name:'Rio de Janeiro', category:'City', lat:-22.9068, lon:-43.1729},
+  {name:'Moscow', category:'City', lat:55.7558, lon:37.6173},
+  {name:'Beijing', category:'City', lat:39.9042, lon:116.4074},
+  {name:'Dubai', category:'City', lat:25.2048, lon:55.2708},
+  {name:'Cape Town', category:'City', lat:-33.9249, lon:18.4241},
+  {name:'Nairobi', category:'City', lat:-1.2921, lon:36.8219},
+  {name:'Reykjavik', category:'City', lat:64.1466, lon:-21.9426},
+  {name:'Mumbai', category:'City', lat:19.0760, lon:72.8777},
+  {name:'Singapore', category:'City', lat:1.3521, lon:103.8198},
+  {name:'Toronto', category:'City', lat:43.6532, lon:-79.3832},
+  {name:'Mexico City', category:'City', lat:19.4326, lon:-99.1332},
+  {name:'Buenos Aires', category:'City', lat:-34.6037, lon:-58.3816},
+  {name:'Auckland', category:'City', lat:-36.8485, lon:174.7633},
+  {name:'Wellington', category:'City', lat:-41.2865, lon:174.7762},
+  // national parks / reserves
+  {name:'Yellowstone National Park', category:'National Park', lat:44.4280, lon:-110.5885},
+  {name:'Yosemite National Park', category:'National Park', lat:37.8651, lon:-119.5383},
+  {name:'Kruger National Park', category:'National Park', lat:-23.9884, lon:31.5547},
+  {name:'Serengeti National Park', category:'National Park', lat:-2.3333, lon:34.8333},
+  {name:'Banff National Park', category:'National Park', lat:51.4968, lon:-115.9281},
+  {name:'Torres del Paine', category:'National Park', lat:-50.9423, lon:-73.4068},
+  {name:'Fiordland National Park', category:'National Park', lat:-45.4131, lon:167.7189},
+  {name:'Galápagos Islands', category:'National Park', lat:-0.9538, lon:-90.9656},
+  {name:'Aoraki Mackenzie Dark Sky Reserve', category:'National Park', lat:-43.9944, lon:170.4650},
+  // iconic locations
+  {name:'Mount Everest', category:'Landmark', lat:27.9881, lon:86.9250},
+  {name:'Grand Canyon', category:'Landmark', lat:36.1069, lon:-112.1129},
+  {name:'Sahara Desert', category:'Landmark', lat:23.4162, lon:5.6000},
+  {name:'Amazon Rainforest', category:'Landmark', lat:-3.4653, lon:-62.2159},
+  {name:'Great Wall of China', category:'Landmark', lat:40.3554, lon:116.0119},
+  {name:'Pyramids of Giza', category:'Landmark', lat:29.9792, lon:31.1342},
+  {name:'Uluru', category:'Landmark', lat:-25.3444, lon:131.0369},
+  {name:'Machu Picchu', category:'Landmark', lat:-13.1631, lon:-72.5450},
+  {name:'Petra', category:'Landmark', lat:30.3285, lon:35.4444},
+  {name:'Victoria Falls', category:'Landmark', lat:-17.9243, lon:25.8572},
+  {name:'Niagara Falls', category:'Landmark', lat:43.0962, lon:-79.0377},
+  {name:'Mount Kilimanjaro', category:'Landmark', lat:-3.0674, lon:37.3556},
+  {name:'South Pole', category:'Landmark', lat:-90.0000, lon:0.0000},
+  {name:'Santorini', category:'Landmark', lat:36.3932, lon:25.4615},
+  {name:'Ha Long Bay', category:'Landmark', lat:20.9101, lon:107.1839},
+  {name:'Angel Falls', category:'Landmark', lat:5.9701, lon:-62.5362},
+  {name:'Death Valley', category:'Landmark', lat:36.5054, lon:-117.0794},
+  {name:'Great Barrier Reef', category:'Landmark', lat:-18.2871, lon:147.6992},
+  {name:'Vatnajökull Glacier', category:'Landmark', lat:64.4147, lon:-16.9722},
+  {name:'Mont Blanc', category:'Landmark', lat:45.8326, lon:6.8652},
+  {name:'Iguazu Falls', category:'Landmark', lat:-25.6953, lon:-54.4367},
+  {name:'Angkor Wat', category:'Landmark', lat:13.4125, lon:103.8670},
+  {name:'Taj Mahal', category:'Landmark', lat:27.1751, lon:78.0421},
+  {name:'Lake Tekapo', category:'Landmark', lat:-44.0068, lon:170.4790},
+  {name:'North Pole', category:'Landmark', lat:90.0000, lon:0.0000},
+  // more cities
+  {name:'Los Angeles', category:'City', lat:34.0522, lon:-118.2437},
+  {name:'Chicago', category:'City', lat:41.8781, lon:-87.6298},
+  {name:'San Francisco', category:'City', lat:37.7749, lon:-122.4194},
+  {name:'Washington D.C.', category:'City', lat:38.9072, lon:-77.0369},
+  {name:'Berlin', category:'City', lat:52.5200, lon:13.4050},
+  {name:'Rome', category:'City', lat:41.9028, lon:12.4964},
+  {name:'Madrid', category:'City', lat:40.4168, lon:-3.7038},
+  {name:'Amsterdam', category:'City', lat:52.3676, lon:4.9041},
+  {name:'Vienna', category:'City', lat:48.2082, lon:16.3738},
+  {name:'Prague', category:'City', lat:50.0755, lon:14.4378},
+  {name:'Istanbul', category:'City', lat:41.0082, lon:28.9784},
+  {name:'Athens', category:'City', lat:37.9838, lon:23.7275},
+  {name:'Lisbon', category:'City', lat:38.7223, lon:-9.1393},
+  {name:'Dublin', category:'City', lat:53.3498, lon:-6.2603},
+  {name:'Stockholm', category:'City', lat:59.3293, lon:18.0686},
+  {name:'Oslo', category:'City', lat:59.9139, lon:10.7522},
+  {name:'Helsinki', category:'City', lat:60.1699, lon:24.9384},
+  {name:'Copenhagen', category:'City', lat:55.6761, lon:12.5683},
+  {name:'Warsaw', category:'City', lat:52.2297, lon:21.0122},
+  {name:'Budapest', category:'City', lat:47.4979, lon:19.0402},
+  {name:'Zurich', category:'City', lat:47.3769, lon:8.5417},
+  {name:'Barcelona', category:'City', lat:41.3874, lon:2.1686},
+  {name:'Munich', category:'City', lat:48.1351, lon:11.5820},
+  {name:'Seoul', category:'City', lat:37.5665, lon:126.9780},
+  {name:'Shanghai', category:'City', lat:31.2304, lon:121.4737},
+  {name:'Hong Kong', category:'City', lat:22.3193, lon:114.1694},
+  {name:'Bangkok', category:'City', lat:13.7563, lon:100.5018},
+  {name:'Jakarta', category:'City', lat:-6.2088, lon:106.8456},
+  {name:'Kuala Lumpur', category:'City', lat:3.1390, lon:101.6869},
+  {name:'Manila', category:'City', lat:14.5995, lon:120.9842},
+  {name:'Ho Chi Minh City', category:'City', lat:10.8231, lon:106.6297},
+  {name:'New Delhi', category:'City', lat:28.6139, lon:77.2090},
+  {name:'Tehran', category:'City', lat:35.6892, lon:51.3890},
+  {name:'Riyadh', category:'City', lat:24.7136, lon:46.6753},
+  {name:'Doha', category:'City', lat:25.2854, lon:51.5310},
+  {name:'Jerusalem', category:'City', lat:31.7683, lon:35.2137},
+  {name:'Tel Aviv', category:'City', lat:32.0853, lon:34.7818},
+  {name:'Baghdad', category:'City', lat:33.3152, lon:44.3661},
+  {name:'Johannesburg', category:'City', lat:-26.2041, lon:28.0473},
+  {name:'Lagos', category:'City', lat:6.5244, lon:3.3792},
+  {name:'Addis Ababa', category:'City', lat:9.0320, lon:38.7469},
+  {name:'Casablanca', category:'City', lat:33.5731, lon:-7.5898},
+  {name:'São Paulo', category:'City', lat:-23.5505, lon:-46.6333},
+  {name:'Lima', category:'City', lat:-12.0464, lon:-77.0428},
+  {name:'Bogotá', category:'City', lat:4.7110, lon:-74.0721},
+  {name:'Santiago', category:'City', lat:-33.4489, lon:-70.6693},
+  {name:'Caracas', category:'City', lat:10.4806, lon:-66.9036},
+  {name:'Havana', category:'City', lat:23.1136, lon:-82.3666},
+  {name:'Vancouver', category:'City', lat:49.2827, lon:-123.1207},
+  {name:'Montreal', category:'City', lat:45.5019, lon:-73.5674},
+  {name:'Honolulu', category:'City', lat:21.3069, lon:-157.8583},
+  {name:'Perth', category:'City', lat:-31.9505, lon:115.8605},
+  {name:'Melbourne', category:'City', lat:-37.8136, lon:144.9631},
+  {name:'Christchurch', category:'City', lat:-43.5321, lon:172.6362},
+  {name:'Ulaanbaatar', category:'City', lat:47.8864, lon:106.9057},
+  {name:'Kathmandu', category:'City', lat:27.7172, lon:85.3240},
+  {name:'Colombo', category:'City', lat:6.9271, lon:79.8612},
+  // more national parks / reserves
+  {name:'Grand Teton National Park', category:'National Park', lat:43.7904, lon:-110.6818},
+  {name:'Zion National Park', category:'National Park', lat:37.2982, lon:-113.0263},
+  {name:'Glacier National Park', category:'National Park', lat:48.6961, lon:-113.7183},
+  {name:'Denali National Park', category:'National Park', lat:63.1148, lon:-151.1926},
+  {name:'Everglades National Park', category:'National Park', lat:25.2866, lon:-80.8987},
+  {name:'Great Smoky Mountains National Park', category:'National Park', lat:35.6118, lon:-83.4895},
+  {name:'Joshua Tree National Park', category:'National Park', lat:33.8734, lon:-115.9010},
+  {name:'Bryce Canyon National Park', category:'National Park', lat:37.5930, lon:-112.1871},
+  {name:'Jasper National Park', category:'National Park', lat:52.8734, lon:-117.9543},
+  {name:'Plitvice Lakes National Park', category:'National Park', lat:44.8654, lon:15.5820},
+  {name:'Masai Mara National Reserve', category:'National Park', lat:-1.4061, lon:35.0117},
+  {name:'Ngorongoro Crater', category:'National Park', lat:-3.2000, lon:35.5000},
+  {name:'Komodo National Park', category:'National Park', lat:-8.5500, lon:119.4833},
+  {name:'Ranthambore National Park', category:'National Park', lat:26.0173, lon:76.5026},
+  {name:'Tongariro National Park', category:'National Park', lat:-39.1359, lon:175.6440},
+  {name:'Abel Tasman National Park', category:'National Park', lat:-40.9500, lon:173.0000},
+  {name:'Kakadu National Park', category:'National Park', lat:-12.6500, lon:132.8333},
+  {name:'Volcanoes National Park', category:'National Park', lat:-1.4696, lon:29.4906},
+  {name:'Chobe National Park', category:'National Park', lat:-18.6000, lon:24.9000},
+  // more landmarks
+  {name:'Eiffel Tower', category:'Landmark', lat:48.8584, lon:2.2945},
+  {name:'Colosseum', category:'Landmark', lat:41.8902, lon:12.4922},
+  {name:'Statue of Liberty', category:'Landmark', lat:40.6892, lon:-74.0445},
+  {name:'Big Ben', category:'Landmark', lat:51.5007, lon:-0.1246},
+  {name:'Christ the Redeemer', category:'Landmark', lat:-22.9519, lon:-43.2105},
+  {name:'Sydney Opera House', category:'Landmark', lat:-33.8568, lon:151.2153},
+  {name:'Golden Gate Bridge', category:'Landmark', lat:37.8199, lon:-122.4783},
+  {name:'Mount Fuji', category:'Landmark', lat:35.3606, lon:138.7274},
+  {name:'Table Mountain', category:'Landmark', lat:-33.9628, lon:18.4098},
+  {name:'Chichen Itza', category:'Landmark', lat:20.6843, lon:-88.5678},
+  {name:'Easter Island', category:'Landmark', lat:-27.1127, lon:-109.3497},
+  {name:'Stonehenge', category:'Landmark', lat:51.1789, lon:-1.8262},
+  {name:'Neuschwanstein Castle', category:'Landmark', lat:47.5576, lon:10.7498},
+  {name:'Forbidden City', category:'Landmark', lat:39.9163, lon:116.3972},
+  {name:'Burj Khalifa', category:'Landmark', lat:25.1972, lon:55.2744},
+  {name:'Leaning Tower of Pisa', category:'Landmark', lat:43.7230, lon:10.3966},
+  {name:'Acropolis of Athens', category:'Landmark', lat:37.9715, lon:23.7267},
+  {name:'Alhambra', category:'Landmark', lat:37.1761, lon:-3.5881},
+  {name:'Mount Rushmore', category:'Landmark', lat:43.8791, lon:-103.4591},
+  {name:'Salar de Uyuni', category:'Landmark', lat:-20.1338, lon:-67.4891},
+  {name:'Cappadocia', category:'Landmark', lat:38.6431, lon:34.8289},
+  {name:'Dead Sea', category:'Landmark', lat:31.5590, lon:35.4732},
+  {name:'Matterhorn', category:'Landmark', lat:45.9763, lon:7.6586},
+  {name:'K2', category:'Landmark', lat:35.8825, lon:76.5133},
+  {name:'Bagan', category:'Landmark', lat:21.1717, lon:94.8585},
+  {name:'Meteora', category:'Landmark', lat:39.7217, lon:21.6306},
+  {name:"Giant's Causeway", category:'Landmark', lat:55.2408, lon:-6.5116},
+  {name:'Perito Moreno Glacier', category:'Landmark', lat:-50.4967, lon:-73.1379},
+  {name:'Lake Baikal', category:'Landmark', lat:53.5587, lon:108.1650},
+  {name:'Zhangjiajie', category:'Landmark', lat:29.3167, lon:110.4792},
+  {name:'Bora Bora', category:'Landmark', lat:-16.5004, lon:-151.7415},
+  {name:'Maldives', category:'Landmark', lat:3.2028, lon:73.2207},
+  {name:'Cinque Terre', category:'Landmark', lat:44.1461, lon:9.6438},
+  {name:'Amalfi Coast', category:'Landmark', lat:40.6333, lon:14.6029},
+  {name:'Grand Prismatic Spring', category:'Landmark', lat:44.5251, lon:-110.8380},
+  {name:'Antelope Canyon', category:'Landmark', lat:36.8619, lon:-111.3743},
+];
+
+let flight = null;
+
+function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+function flyTo(lat, lon){
+  const startDir = camera.position.clone().normalize();
+  const startDist = camera.position.length();
+  const targetDist = EARTH_RADIUS * 1.7;
+
+  const local = latLonToLocalVector(lat, lon);
+  const endDir = local.clone().applyMatrix4(new THREE.Matrix4().makeRotationZ(tiltGroup.rotation.z)).normalize();
+
+  const dot = THREE.MathUtils.clamp(startDir.dot(endDir), -1, 1);
+  const omega = Math.acos(dot);
+  const peakDist = Math.max(startDist, targetDist) + 9;
+
+  controls.enabled = false;
+  spinOn = false; controls.autoRotate = false;
+  zoomZone = 'in';
+  btnSpin.classList.remove('active');
+  btnSpin.textContent = 'Auto-rotate: off';
+  marker.visible = false;
+
+  flight = { startDir, endDir, omega, startDist, targetDist, peakDist, local, duration: 2200, t0: performance.now() };
+}
+
+function stepFlight(){
+  if(!flight) return;
+  const now = performance.now();
+  const t = Math.min((now - flight.t0) / flight.duration, 1);
+  const ease = easeInOutCubic(t);
+
+  let dir;
+  if(flight.omega > 0.001){
+    const s = Math.sin(flight.omega);
+    dir = flight.startDir.clone().multiplyScalar(Math.sin((1-ease)*flight.omega)/s)
+      .add(flight.endDir.clone().multiplyScalar(Math.sin(ease*flight.omega)/s));
+  } else {
+    dir = flight.startDir.clone().lerp(flight.endDir, ease);
+  }
+  dir.normalize();
+
+  const hump = Math.sin(Math.PI*ease);
+  const baseDist = THREE.MathUtils.lerp(flight.startDist, flight.targetDist, ease);
+  const dist = baseDist + hump * (flight.peakDist - Math.max(flight.startDist, flight.targetDist)) * 0.5;
+
+  camera.position.copy(dir.multiplyScalar(dist));
+  camera.lookAt(0,0,0);
+
+  if(t >= 1){
+    marker.position.copy(flight.local.clone().multiplyScalar(EARTH_RADIUS*1.01));
+    marker.visible = true;
+    controls.enabled = true;
+    controls.target.set(0,0,0);
+    flight = null;
+  }
+}
+
+// ---------- search UI ----------
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+const searchClear = document.getElementById('searchClear');
+let currentMatches = [];
+let activeIndex = -1;
+
+// Matches only at the start of the whole name or the start of any individual word within
+// it — e.g. "ath" matches "Athens" but not "Death Valley" or "Kathmandu"; "ever" matches
+// "Mount Everest" via its second word.
+function matchesQuery(name, q){
+  const lower = name.toLowerCase();
+  if(lower.startsWith(q)) return true;
+  return lower.split(/[\s\-']+/).some(word => word.startsWith(q));
+}
+
+function renderMatches(matches){
+  currentMatches = matches;
+  activeIndex = -1;
+  searchResults.innerHTML = '';
+  if(matches.length === 0){ searchResults.classList.remove('open'); return; }
+  matches.forEach(m=>{
+    const row = document.createElement('div');
+    row.className = 'searchRow';
+    row.innerHTML = `<span>${m.name}</span><span class="cat">${m.category}</span>`;
+    row.addEventListener('mousedown', (e)=>{ e.preventDefault(); selectLocation(m); });
+    searchResults.appendChild(row);
+  });
+  searchResults.classList.add('open');
+}
+
+function highlightActive(){
+  [...searchResults.children].forEach((el,i)=> el.classList.toggle('active', i===activeIndex));
+}
+
+function selectLocation(loc){
+  searchInput.value = loc.name;
+  searchResults.classList.remove('open');
+  searchClear.classList.toggle('show', searchInput.value.length > 0);
+  hideHint();
+  flyTo(loc.lat, loc.lon);
+}
+
+searchInput.addEventListener('input', ()=>{
+  const q = searchInput.value.trim().toLowerCase();
+  searchClear.classList.toggle('show', searchInput.value.length > 0);
+  if(q.length === 0){ searchResults.classList.remove('open'); return; }
+  const matches = LOCATIONS.filter(l => matchesQuery(l.name, q)).slice(0, 6);
+  renderMatches(matches);
+});
+searchClear.addEventListener('click', ()=>{
+  searchInput.value = '';
+  searchClear.classList.remove('show');
+  searchResults.classList.remove('open');
+  marker.visible = false;
+  searchInput.focus();
+});
+searchInput.addEventListener('focus', ()=>{
+  if(searchInput.value.trim().length > 0 && currentMatches.length > 0) searchResults.classList.add('open');
+});
+searchInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowDown'){ e.preventDefault(); activeIndex = Math.min(activeIndex+1, currentMatches.length-1); highlightActive(); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); activeIndex = Math.max(activeIndex-1, 0); highlightActive(); }
+  else if(e.key === 'Enter'){
+    if(activeIndex >= 0 && currentMatches[activeIndex]) selectLocation(currentMatches[activeIndex]);
+    else if(currentMatches.length > 0) selectLocation(currentMatches[0]);
+  } else if(e.key === 'Escape'){ searchResults.classList.remove('open'); searchInput.blur(); }
+});
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('#searchWrap')) searchResults.classList.remove('open');
+});
+
+// ---------- zoom-aware drag sensitivity ----------
+// OrbitControls' rotateSpeed maps drag pixels to a fixed angle regardless of zoom, so a
+// drag that pans a small slice of the globe when zoomed out swings wildly when zoomed in
+// close to the surface. Scale it down near the surface so dragging tracks the ground
+// underneath the cursor instead of overshooting.
+const ROTATE_SPEED_MIN = 0.04;
+const ROTATE_SPEED_MAX = 0.45;
+function updateRotateSpeed(){
+  const dist = camera.position.length();
+  const t = THREE.MathUtils.clamp((dist - EARTH_RADIUS) / (EARTH_RADIUS * 2.2), 0, 1);
+  controls.rotateSpeed = THREE.MathUtils.lerp(ROTATE_SPEED_MIN, ROTATE_SPEED_MAX, t);
+}
+
+// ---------- zoom-driven night-side detail reveal ----------
+// Purely a function of camera distance — nothing to do with elapsed time. Zoomed all the
+// way out, the night side stays properly dark; zoom in and it gradually brightens, fully
+// fading to the actual bright day texture right at true max zoom (controls.minDistance,
+// which is itself DPI-computed — see computeMinZoomDistance — not a fixed value), then
+// dims back down as you pull back out.
+const NIGHT_BOOST_FAR = EARTH_RADIUS * 3.0; // at/beyond this distance: no boost, normal dark night
+function updateNightBoost(){
+  const dist = camera.position.length();
+  const near = controls.minDistance; // tracks the real, current max-zoom limit
+  const t = THREE.MathUtils.clamp((NIGHT_BOOST_FAR - dist) / (NIGHT_BOOST_FAR - near), 0, 1);
+  earthMat.uniforms.nightBoost.value = t;
+}
+
+
+// ---------- resize ----------
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  controls.minDistance = computeMinZoomDistance();
+  // Re-fit the default framing across orientation changes / window resizes — but only
+  // if the user hasn't manually zoomed away from that default first.
+  const dist = camera.position.length();
+  if (Math.abs(dist - lastFitDistance) < lastFitDistance * 0.02) {
+    lastFitDistance = computeFitDistance();
+    camera.position.setLength(lastFitDistance);
+  }
+  if(panoramaViewerOpen) resizePanoRenderer();
+});
+
+// ---------- animation loop ----------
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  if(panoramaViewerOpen){
+    renderPanoramaFrame();
+    return;
+  }
+
+  // an almost-imperceptible independent drift (~2hr per revolution) so clouds read as
+  // weather rather than a texture painted onto the globe, without visibly slipping out
+  // of registration with the terrain the way they did before
+  if(cloudsOn) clouds.rotation.y += dt*0.00025;
+
+  // marker gentle pulse + constant on-screen size (scaled by distance so it reads as the
+  // same number of pixels across whether you're zoomed all the way out or in close,
+  // rather than growing huge as you approach it)
+  if(marker.visible){
+    const s = 1 + Math.sin(performance.now()*0.004)*0.15;
+    marker.children[1].scale.setScalar(s);
+
+    const markerWorldPos = new THREE.Vector3();
+    marker.getWorldPosition(markerWorldPos);
+    const distToMarker = camera.position.distanceTo(markerWorldPos);
+    const fovRad = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = renderer.domElement.clientHeight || window.innerHeight;
+    const desiredPixelRadius = 6; // how big the core dot should read on screen, in px
+    const worldRadius = 2 * desiredPixelRadius * distToMarker * Math.tan(fovRad/2) / viewHeight;
+    marker.scale.setScalar(worldRadius / MARKER_BASE_RADIUS);
+  }
+
+  if(flight){
+    stepFlight();
+  } else {
+    updateRotateSpeed();
+    updateAutoRotateForZoom();
+    controls.update();
+  }
+  updateNightBoost();
+  updateSkyBlend(dt);
+  updateReadout();
+  updatePhotosphereMarkerScale();
+  updatePhotosphereClusters();
+  // checkDetailPatchTrigger(); // disabled — Esri export endpoint returning blank/black results, see chat
+
+  // sun direction in view space, kept in sync with the current camera every frame
+  camera.updateMatrixWorld();
+  sunViewDir.copy(sunWorldDir).transformDirection(camera.matrixWorldInverse).normalize();
+  earthMat.uniforms.sunDirView.value.copy(sunViewDir);
+  cloudMat.uniforms.sunDirView.value.copy(sunViewDir);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
