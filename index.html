@@ -989,10 +989,12 @@ const PANORAMAS = [
     imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Bryce%20Canyon%2C%20UT.jpg' },
   { id:'bryce-canyon-ut-sunset', name:'Sunset Campground, Bryce Canyon, UT', lat:37.620929, lon:-112.176882,
     imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Bryce%20Canyon%2C%20UT%20(second%20site).jpg' },
+  { id:'yosemite-ca', name:'El Capitan Meadow, Yosemite, CA', lat:37.7245, lon:-119.6355,
+    imageUrl:'https://raw.githubusercontent.com/maxnti/360-Panoramas/main/photos/Yosemite%2C%20CA.jpg' },
 ];
 const PHOTOSPHERE_MARKER_BASE_RADIUS = 0.05;
 const photosphereGroup = new THREE.Group();
-photosphereGroup.visible = false;
+photosphereGroup.visible = true;
 
 function buildPhotosphereMarkers(){
   while(photosphereGroup.children.length){
@@ -1088,7 +1090,8 @@ const btnReset  = document.getElementById('resetView');
 
 // ---------- photosphere layer toggle ----------
 const photosphereToggleBtn = document.getElementById('photosphereToggleBtn');
-let photosphereLayerOn = false;
+let photosphereLayerOn = true;
+photosphereToggleBtn.classList.add('active');
 photosphereToggleBtn.addEventListener('click', ()=>{
   photosphereLayerOn = !photosphereLayerOn;
   photosphereGroup.visible = photosphereLayerOn;
